@@ -5,16 +5,20 @@
 Adafruit_LiquidCrystal pantalla_residuos(0);
 
 const int sensor_pir = 9;
-const int echoDistanciaContenedor = 11;
-const int triggerDistanciaContenedor = 12;
-const int motor_tapa = 10;
+const int echoDistanciaContenedor = 12;
+const int triggerDistanciaContenedor = 13;
+const int motor_tapa_uno = 10;
+const int motor_tapa_dos = 11;
 
 const int triggerContenido = 4;
 const int echoContenido = 5;
 
+const int switchPin = 8;
+
 int led_rojo = 3;
 int led_verde = 2;
-Servo servoCompuerta;
+Servo servoCompuertaUno;
+Servo servoCompuertaDos;
 
 // variables y estados
 int distanciaLimite = 150; // distancia limite en cm para abrir tapa
@@ -32,6 +36,7 @@ const char *mensajeSerial = "Contenedor lleno. Notificando a area de Mantenimien
 unsigned long tiempoPantallaEncendida = 0;
 unsigned long duracionPantallaEncendida = 3000; // 5 segundos
 bool pantallaEncendida = true;
+bool aperturaManual = false;
 
 //-----------------------------------------------------------------
 
@@ -42,6 +47,7 @@ void setup()
     pinMode(echoContenido, INPUT);
     pinMode(led_verde, OUTPUT);
     pinMode(led_rojo, OUTPUT);
+    pinMode(switchPin, INPUT);
 
     pinMode(triggerDistanciaContenedor, OUTPUT);
     pinMode(echoDistanciaContenedor, INPUT);
@@ -50,8 +56,11 @@ void setup()
 
     pantalla_residuos.begin(16, 2);
 
-    servoCompuerta.attach(motor_tapa);
-    servoCompuerta.write(0);
+    servoCompuertaUno.attach(motor_tapa_uno);
+    servoCompuertaUno.write(0);
+
+    servoCompuertaDos.attach(motor_tapa_dos);
+    servoCompuertaDos.write(0);
 
     aptoRecibir(triggerContenido, echoContenido);
     apagarPantalla();
@@ -162,14 +171,63 @@ void procesoEnRiesgo() // logica por contenedor al maximo de capacidad posterior
     pantalla_residuos.print("al tope.");
 }
 
+void puertaAbiertaManualmente() // logica para abrir puerta manualmente
+{
+    aperturaManual = true;
+    digitalWrite(led_verde, LOW);
+    digitalWrite(led_rojo, HIGH);
+    pantalla_residuos.clear();
+    pantalla_residuos.setCursor(0, 0);
+    encenderPantalla();
+    pantalla_residuos.print("Apertura Manual");
+    pantalla_residuos.setCursor(0, 1);
+    pantalla_residuos.print("Puerta fija");
+    if (!compuertaAbierta)
+    {
+        abrirCompuerta();
+        compuertaAbierta = true;
+    }
+
+    apagarPantalla();
+}
+
+void puertaCerradaManualmente() // logica para cerrar puerta manualmente
+{
+    aperturaManual = false;
+    pantalla_residuos.clear();
+    pantalla_residuos.setCursor(0, 0);
+    encenderPantalla();
+    pantalla_residuos.print("Cerrando");
+    pantalla_residuos.setCursor(0, 1);
+    pantalla_residuos.print("puerta normal");
+
+    delay(2000);
+    estadoContenedor();
+    if (compuertaAbierta)
+    {
+        cerrarCompuerta();
+        compuertaAbierta = false;
+    }
+}
+
 void abrirCompuerta() // abrir tapa contenedor
 {
-    servoCompuerta.write(90);
+    for (int pos = 0; pos <= 60; pos++)
+    {
+        servoCompuertaUno.write(pos);
+        servoCompuertaDos.write(pos);
+        delay(30);
+    }
 }
 
 void cerrarCompuerta() // cerrar tapa contenedor
 {
-    servoCompuerta.write(0);
+    for (int pos = 60; pos >= 0; pos--)
+    {
+        servoCompuertaUno.write(pos);
+        servoCompuertaDos.write(pos);
+        delay(30);
+    }
 }
 
 //-----------------------------------------------------------------
@@ -250,12 +308,32 @@ void validadorEspacio()
     }
 }
 
+bool manejoManual()
+{
+
+    if (digitalRead(switchPin) == HIGH && !aperturaManual)
+    {
+        puertaAbiertaManualmente();
+        return false;
+    }
+    else if (digitalRead(switchPin) == LOW && aperturaManual)
+    {
+        puertaCerradaManualmente();
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
 // ==================================================================
 // ==================================================================
 void loop()
 {
 
-    if (digitalRead(sensor_pir))
+    bool validacionManual = manejoManual();
+    if (digitalRead(sensor_pir) && validacionManual)
     {
 
         bool deteccionPersona = personaDetectada(triggerDistanciaContenedor, echoDistanciaContenedor);
