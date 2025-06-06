@@ -1,68 +1,79 @@
+// ================================================================================
+// Librerias
 #include <Servo.h>
 #include <Adafruit_LiquidCrystal.h>
 
-// pantalla
-Adafruit_LiquidCrystal pantalla_residuos(0);
+// ================================================================================
+// Declaraciones
+const int switch_deslizante = 8;   // interruptor manual
+const int sensor_pri_princial = 9; // sensor de movimiento
 
-const int sensor_pir = 9;
-const int echoDistanciaContenedor = 12;
-const int triggerDistanciaContenedor = 13;
-const int motor_tapa_uno = 10;
-const int motor_tapa_dos = 11;
+const int echo_sensor_distancia = 12;    // echo del sensor de distancia
+const int trigger_sensor_distancia = 13; // trigger del sensor de distancia
 
-const int triggerContenido = 4;
-const int echoContenido = 5;
+const int echo_sensor_contenido = 5;    // echo sensor de altura de residuos
+const int trigger_sensor_contenido = 4; // trigger sensor de altura de residuos
 
-const int switchPin = 8;
+// servo motor 1
+const int servo_uno_compuerta = 10;
+Servo instancia_servo_uno;
 
-int led_rojo = 3;
-int led_verde = 2;
-Servo servoCompuertaUno;
-Servo servoCompuertaDos;
+// servo motor 2
+const int servo_dos_compuerta = 11;
+Servo instancia_servo_dos;
 
+Adafruit_LiquidCrystal pantalla_residuos(0); // pantalla LCD
+int led_rojo = 3;  // led de color rojo
+int led_verde = 2; // led de color verde
+
+// ================================================================================
 // variables y estados
-int distanciaLimite = 150; // distancia limite en cm para abrir tapa
-int limiteResiduos = 90;   // altura maxima para considerar contenedor lleno
+int umbral_distancia_trigger = 150; // umbral de distancia minimo para detectar una persona cerca
+int umbral_altura_contenedor = 90;  // umbral de altura maxima de residuos permitidos en el contenedor para declararlo como "disponible"
 
-bool espacioDisponible = true;
-bool compuertaAbierta = false;
-int conteoAperturas = 0;
-int intentosFallidos = 0;
+bool espacio_disponible = true; // variable para controlar el estado del contenedor
+bool compuerta_abierta = false; // variable para controlar el estado de la compuerta
 
-int auxiliarContenido = 0;
+int delay_apertura_servo = 30; // variable para definir delay en apertura para evitar movimientos bruscos
+int angulo_limite_servo = 60;  // limite de apertura de la compuerta
 
-const char *mensajeSerial = "Contenedor lleno. Notificando a area de Mantenimientos.";
+int conteo_aperturas_exitosos = 0; // variable para controlar el conteo de aperturas.
+int conteo_aperturas_fallidos = 0; // variable para controlar el conteo de intentos fallidos
 
-unsigned long tiempoPantallaEncendida = 0;
-unsigned long duracionPantallaEncendida = 3000; // 5 segundos
-bool pantallaEncendida = true;
-bool aperturaManual = false;
+int variable_auxiliar_contenido = 0; // Se trata de una variable helper para ciertos casos hibridos
+
+const char *mensaje_contendor_lleno = "Contenedor lleno. Notificando a area de Mantenimientos."; // mensaje de alerta re utilizado en varias ocasiones
+
+unsigned long variable_auxiliar_tiempo_pantalla_encendida = 0; // variable para controlar el tiempo de encFendido de la pantalla
+unsigned long duracion_pantalla_encendida = 3000; // Tiempo que la pantalla permanecera encendida
+bool pantalla_encendida = true; // variable para controlar el estado de la pantalla
+bool apertura_manual_contenedor = false; // variable para controlar el estado de la puerta
 
 //-----------------------------------------------------------------
 
 void setup()
 {
     Serial.begin(9600);
-    pinMode(triggerContenido, OUTPUT);
-    pinMode(echoContenido, INPUT);
+    pinMode(trigger_sensor_contenido, OUTPUT);
+    pinMode(echo_sensor_contenido, INPUT);
     pinMode(led_verde, OUTPUT);
     pinMode(led_rojo, OUTPUT);
-    pinMode(switchPin, INPUT);
+    pinMode(switch_deslizante, INPUT);
 
-    pinMode(triggerDistanciaContenedor, OUTPUT);
-    pinMode(echoDistanciaContenedor, INPUT);
+    pinMode(trigger_sensor_distancia, OUTPUT);
+    pinMode(echo_sensor_distancia, INPUT);
 
-    pinMode(sensor_pir, INPUT);
+    pinMode(sensor_pri_princial, INPUT);
 
     pantalla_residuos.begin(16, 2);
 
-    servoCompuertaUno.attach(motor_tapa_uno);
-    servoCompuertaUno.write(0);
+    instancia_servo_uno.attach(servo_uno_compuerta);
+    instancia_servo_uno.write(0);
 
-    servoCompuertaDos.attach(motor_tapa_dos);
-    servoCompuertaDos.write(0);
+    instancia_servo_dos.attach(servo_dos_compuerta);
+    instancia_servo_dos.write(0);
 
-    aptoRecibir(triggerContenido, echoContenido);
+    aptoRecibir(trigger_sensor_contenido, echo_sensor_contenido);
     apagarPantalla();
 }
 
@@ -72,20 +83,20 @@ void setup()
 
 void encenderPantalla()
 {
-    if (!pantallaEncendida)
+    if (!pantalla_encendida)
     {
         pantalla_residuos.setBacklight(HIGH); // encendemos la pantalla
-        pantallaEncendida = true;
+        pantalla_encendida = true;
     }
-    tiempoPantallaEncendida = millis(); // reinicio el contaodr
+    variable_auxiliar_tiempo_pantalla_encendida = millis(); // reinicio el contaodr
 }
 
 void apagarPantalla()
 {
-    if (pantallaEncendida && millis() - tiempoPantallaEncendida >= duracionPantallaEncendida)
+    if (pantalla_encendida && millis() - variable_auxiliar_tiempo_pantalla_encendida >= duracion_pantalla_encendida)
     {
         pantalla_residuos.setBacklight(LOW); // apagamos la pantalla
-        pantallaEncendida = false;
+        pantalla_encendida = false;
     }
 }
 
@@ -173,7 +184,7 @@ void procesoEnRiesgo() // logica por contenedor al maximo de capacidad posterior
 
 void puertaAbiertaManualmente() // logica para abrir puerta manualmente
 {
-    aperturaManual = true;
+    apertura_manual_contenedor = true;
     digitalWrite(led_verde, LOW);
     digitalWrite(led_rojo, HIGH);
     pantalla_residuos.clear();
@@ -182,10 +193,10 @@ void puertaAbiertaManualmente() // logica para abrir puerta manualmente
     pantalla_residuos.print("Apertura Manual");
     pantalla_residuos.setCursor(0, 1);
     pantalla_residuos.print("Puerta fija");
-    if (!compuertaAbierta)
+    if (!compuerta_abierta)
     {
         abrirCompuerta();
-        compuertaAbierta = true;
+        compuerta_abierta = true;
     }
 
     apagarPantalla();
@@ -193,7 +204,7 @@ void puertaAbiertaManualmente() // logica para abrir puerta manualmente
 
 void puertaCerradaManualmente() // logica para cerrar puerta manualmente
 {
-    aperturaManual = false;
+    apertura_manual_contenedor = false;
     pantalla_residuos.clear();
     pantalla_residuos.setCursor(0, 0);
     encenderPantalla();
@@ -203,30 +214,30 @@ void puertaCerradaManualmente() // logica para cerrar puerta manualmente
 
     delay(2000);
     estadoContenedor();
-    if (compuertaAbierta)
+    if (compuerta_abierta)
     {
         cerrarCompuerta();
-        compuertaAbierta = false;
+        compuerta_abierta = false;
     }
 }
 
 void abrirCompuerta() // abrir tapa contenedor
 {
-    for (int pos = 0; pos <= 60; pos++)
+    for (int pos = 0; pos <= angulo_limite_servo; pos++)
     {
-        servoCompuertaUno.write(pos);
-        servoCompuertaDos.write(pos);
-        delay(30);
+        instancia_servo_uno.write(pos);
+        instancia_servo_dos.write(pos);
+        delay(delay_apertura_servo);
     }
 }
 
 void cerrarCompuerta() // cerrar tapa contenedor
 {
-    for (int pos = 60; pos >= 0; pos--)
+    for (int pos = angulo_limite_servo; pos >= 0; pos--)
     {
-        servoCompuertaUno.write(pos);
-        servoCompuertaDos.write(pos);
-        delay(30);
+        instancia_servo_uno.write(pos);
+        instancia_servo_dos.write(pos);
+        delay(delay_apertura_servo);
     }
 }
 
@@ -251,15 +262,15 @@ long obtenerDistanciaSensor(int triggerPin, int echoPin)
 // devuelve posibilidad de recibir o no contenido
 bool aptoRecibir(int triggerPin, int echoPin)
 {
-    if (obtenerDistanciaSensor(triggerPin, echoPin) >= limiteResiduos)
+    if (obtenerDistanciaSensor(triggerPin, echoPin) >= umbral_altura_contenedor)
     {
-        espacioDisponible = true;
+        espacio_disponible = true;
         estadoContenedor();
         return true;
     }
     else
     {
-        espacioDisponible = false;
+        espacio_disponible = false;
         deshabilitarContenedor();
         return false;
     }
@@ -268,7 +279,7 @@ bool aptoRecibir(int triggerPin, int echoPin)
 // validador de capacidad del contenedor
 bool validarContenido(int triggerPin, int echoPin)
 {
-    if (obtenerDistanciaSensor(triggerPin, echoPin) >= limiteResiduos)
+    if (obtenerDistanciaSensor(triggerPin, echoPin) >= umbral_altura_contenedor)
     {
         return true;
     }
@@ -282,7 +293,7 @@ bool validarContenido(int triggerPin, int echoPin)
 bool personaDetectada(int triggerPin, int echoPin)
 {
 
-    if (obtenerDistanciaSensor(triggerPin, echoPin) <= distanciaLimite)
+    if (obtenerDistanciaSensor(triggerPin, echoPin) <= umbral_distancia_trigger)
     {
         return true;
     }
@@ -294,29 +305,29 @@ bool personaDetectada(int triggerPin, int echoPin)
 
 void validadorEspacio()
 {
-    bool validacionEspacioContenedor = validarContenido(triggerContenido, echoContenido);
+    bool validacionEspacioContenedor = validarContenido(trigger_sensor_contenido, echo_sensor_contenido);
 
-    if (!validacionEspacioContenedor && espacioDisponible)
+    if (!validacionEspacioContenedor && espacio_disponible)
     {
         deshabilitarContenedor();
-        espacioDisponible = false;
+        espacio_disponible = false;
     }
-    else if (validacionEspacioContenedor && !espacioDisponible)
+    else if (validacionEspacioContenedor && !espacio_disponible)
     {
         estadoContenedor();
-        espacioDisponible = true;
+        espacio_disponible = true;
     }
 }
 
 bool manejoManual()
 {
 
-    if (digitalRead(switchPin) == HIGH && !aperturaManual)
+    if (digitalRead(switch_deslizante) == HIGH && !apertura_manual_contenedor)
     {
         puertaAbiertaManualmente();
         return false;
     }
-    else if (digitalRead(switchPin) == LOW && aperturaManual)
+    else if (digitalRead(switch_deslizante) == LOW && apertura_manual_contenedor)
     {
         puertaCerradaManualmente();
         return false;
@@ -333,43 +344,43 @@ void loop()
 {
 
     bool validacionManual = manejoManual();
-    if (digitalRead(sensor_pir) && validacionManual)
+    if (digitalRead(sensor_pri_princial) && validacionManual)
     {
 
-        bool deteccionPersona = personaDetectada(triggerDistanciaContenedor, echoDistanciaContenedor);
+        bool deteccionPersona = personaDetectada(trigger_sensor_distancia, echo_sensor_distancia);
 
         if (deteccionPersona)
         {
             encenderPantalla();
             validadorEspacio();
 
-            if (espacioDisponible)
+            if (espacio_disponible)
             {
 
-                if (!compuertaAbierta)
+                if (!compuerta_abierta)
                 {
                     abrirCompuerta();
-                    compuertaAbierta = true;
-                    auxiliarContenido++;
+                    compuerta_abierta = true;
+                    variable_auxiliar_contenido++;
                     delay(1000);
                     habilitarContenedor();
                 }
             }
             else
             {
-                if (auxiliarContenido > 0)
+                if (variable_auxiliar_contenido > 0)
                 {
                     procesoEnRiesgo();
                     delay(1000);
-                    compuertaAbierta = true;
+                    compuerta_abierta = true;
                 }
                 else
                 {
                     mensajeMantenimiento();
-                    intentosFallidos++;
+                    conteo_aperturas_fallidos++;
                     Serial.println("\n=============================================");
-                    Serial.println(mensajeSerial);
-                    Serial.println("Se intento recilcar " + String(intentosFallidos) + " veces y no fue posible.");
+                    Serial.println(mensaje_contendor_lleno);
+                    Serial.println("Se intento recilcar " + String(conteo_aperturas_fallidos) + " veces y no fue posible.");
                     delay(1000);
                     deshabilitarContenedor();
                 }
@@ -377,49 +388,49 @@ void loop()
         }
         else
         {
-            encenderPantalla();
 
-            if (compuertaAbierta)
+            if (compuerta_abierta)
             {
+                encenderPantalla();
                 validadorEspacio();
 
-                if (espacioDisponible)
+                if (espacio_disponible)
                 {
                     reciclajeExitoso();
-                    compuertaAbierta = false;
-                    conteoAperturas++;
+                    compuerta_abierta = false;
+                    conteo_aperturas_exitosos++;
                     Serial.println("\n=============================================");
-                    Serial.println("Total aperturas: " + String(conteoAperturas));
+                    Serial.println("Total aperturas: " + String(conteo_aperturas_exitosos));
                     delay(1000);
                     estadoContenedor();
                 }
                 else
                 {
-                    if (auxiliarContenido > 0)
+                    if (variable_auxiliar_contenido > 0)
                     {
-                        compuertaAbierta = false;
-                        conteoAperturas++;
+                        compuerta_abierta = false;
+                        conteo_aperturas_exitosos++;
                         delay(1000);
                         deshabilitarContenedor();
                     }
                     else
                     {
-                        if (espacioDisponible)
+                        if (espacio_disponible)
                         {
                             reciclajeExitoso();
-                            compuertaAbierta = false;
-                            conteoAperturas++;
+                            compuerta_abierta = false;
+                            conteo_aperturas_exitosos++;
                             Serial.println("\n=============================================");
-                            Serial.println("Total aperturas: " + String(conteoAperturas));
+                            Serial.println("Total aperturas: " + String(conteo_aperturas_exitosos));
                             delay(1000);
                             estadoContenedor();
                         }
                         else
                         {
                             contenedorAlMaximo();
-                            compuertaAbierta = false;
+                            compuerta_abierta = false;
                             Serial.println("\n=============================================");
-                            Serial.println(mensajeSerial);
+                            Serial.println(mensaje_contendor_lleno);
                             delay(1000);
                             deshabilitarContenedor();
                         }
@@ -428,7 +439,7 @@ void loop()
 
                 cerrarCompuerta();
             }
-            auxiliarContenido = 0; // reset del auxiliar ante cambios en el contenido post reciclaje.
+            variable_auxiliar_contenido = 0; // reset del auxiliar ante cambios en el contenido post reciclaje.
         }
     }
     apagarPantalla();
