@@ -1,12 +1,14 @@
 // ================================================================================
-// Librerias
+// Librerías
+// ================================================================================
 #include <Servo.h>
 #include <Adafruit_LiquidCrystal.h>
 
 // ================================================================================
-// Declaraciones
-const int switch_deslizante = 8;   // interruptor manual
-const int sensor_pri_princial = 9; // sensor de movimiento
+// Declaraciones de pines
+// ================================================================================
+const int switch_deslizante = 8;    // interruptor manual
+const int sensor_pir_principal = 9; // sensor de movimiento
 
 const int echo_sensor_distancia = 12;    // echo del sensor de distancia
 const int trigger_sensor_distancia = 13; // trigger del sensor de distancia
@@ -14,20 +16,23 @@ const int trigger_sensor_distancia = 13; // trigger del sensor de distancia
 const int echo_sensor_contenido = 5;    // echo sensor de altura de residuos
 const int trigger_sensor_contenido = 4; // trigger sensor de altura de residuos
 
-// servo motor 1
-const int servo_uno_compuerta = 10;
+const int servo_uno_compuerta = 10; // servo motor 1
+const int servo_dos_compuerta = 11; // servo motor 2
+
+const int led_rojo = 3;  // led de color rojo
+const int led_verde = 2; // led de color verde
+
+// ================================================================================
+// Objetos
+// ================================================================================
 Servo instancia_servo_uno;
-
-// servo motor 2
-const int servo_dos_compuerta = 11;
 Servo instancia_servo_dos;
-
-Adafruit_LiquidCrystal pantalla_residuos(0); // pantalla LCD
-int led_rojo = 3;  // led de color rojo
-int led_verde = 2; // led de color verde
+Adafruit_LiquidCrystal pantalla_residuos(0);
 
 // ================================================================================
 // variables y estados
+// ================================================================================
+
 int umbral_distancia_trigger = 150; // umbral de distancia minimo para detectar una persona cerca
 int umbral_altura_contenedor = 90;  // umbral de altura maxima de residuos permitidos en el contenedor para declararlo como "disponible"
 
@@ -45,9 +50,9 @@ int variable_auxiliar_contenido = 0; // Se trata de una variable helper para cie
 const char *mensaje_contendor_lleno = "Contenedor lleno. Notificando a area de Mantenimientos."; // mensaje de alerta re utilizado en varias ocasiones
 
 unsigned long variable_auxiliar_tiempo_pantalla_encendida = 0; // variable para controlar el tiempo de encFendido de la pantalla
-unsigned long duracion_pantalla_encendida = 3000; // Tiempo que la pantalla permanecera encendida
-bool pantalla_encendida = true; // variable para controlar el estado de la pantalla
-bool apertura_manual_contenedor = false; // variable para controlar el estado de la puerta
+unsigned long duracion_pantalla_encendida = 3000;              // Tiempo que la pantalla permanecera encendida
+bool pantalla_encendida = true;                                // variable para controlar el estado de la pantalla
+bool apertura_manual_contenedor = false;                       // variable para controlar el estado de la puerta
 
 //-----------------------------------------------------------------
 
@@ -63,7 +68,7 @@ void setup()
     pinMode(trigger_sensor_distancia, OUTPUT);
     pinMode(echo_sensor_distancia, INPUT);
 
-    pinMode(sensor_pri_princial, INPUT);
+    pinMode(sensor_pir_principal, INPUT);
 
     pantalla_residuos.begin(16, 2);
 
@@ -344,7 +349,7 @@ void loop()
 {
 
     bool validacionManual = manejoManual();
-    if (digitalRead(sensor_pri_princial) && validacionManual)
+    if (digitalRead(sensor_pir_principal) && validacionManual)
     {
 
         bool deteccionPersona = personaDetectada(trigger_sensor_distancia, echo_sensor_distancia);
