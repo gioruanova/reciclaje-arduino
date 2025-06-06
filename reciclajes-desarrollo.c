@@ -32,8 +32,7 @@ Adafruit_LiquidCrystal pantalla_residuos(0);
 // ================================================================================
 // variables y estados
 // ================================================================================
-
-int umbral_distancia_trigger = 150; // umbral de distancia minimo para detectar una persona cerca
+int umbral_distancia_persona = 150; // umbral de distancia minimo para detectar una persona cerca
 int umbral_altura_contenedor = 90;  // umbral de altura maxima de residuos permitidos en el contenedor para declararlo como "disponible"
 
 bool espacio_disponible = true; // variable para controlar el estado del contenedor
@@ -45,31 +44,31 @@ int angulo_limite_servo = 60;  // limite de apertura de la compuerta
 int conteo_aperturas_exitosos = 0; // variable para controlar el conteo de aperturas.
 int conteo_aperturas_fallidos = 0; // variable para controlar el conteo de intentos fallidos
 
-int variable_auxiliar_contenido = 0; // Se trata de una variable helper para ciertos casos hibridos
+int auxiliar_contenido = 0; // Se trata de una variable helper para ciertos casos hibridos
 
-const char *mensaje_contendor_lleno = "Contenedor lleno. Notificando a area de Mantenimientos."; // mensaje de alerta re utilizado en varias ocasiones
+const char *mensaje_contenedor_lleno = "Contenedor lleno. Notificando a area de Mantenimientos."; // mensaje de alerta re utilizado en varias ocasiones
 
-unsigned long variable_auxiliar_tiempo_pantalla_encendida = 0; // variable para controlar el tiempo de encFendido de la pantalla
+unsigned long variable_auxiliar_tiempo_pantalla_encendida = 0; // variable para controlar el tiempo de encendido de la pantalla
 unsigned long duracion_pantalla_encendida = 3000;              // Tiempo que la pantalla permanecera encendida
 bool pantalla_encendida = true;                                // variable para controlar el estado de la pantalla
 bool apertura_manual_contenedor = false;                       // variable para controlar el estado de la puerta
 
-//-----------------------------------------------------------------
-
+// ================================================================================
+// Setup
+// ================================================================================
 void setup()
 {
     Serial.begin(9600);
     pinMode(trigger_sensor_contenido, OUTPUT);
     pinMode(echo_sensor_contenido, INPUT);
-    pinMode(led_verde, OUTPUT);
-    pinMode(led_rojo, OUTPUT);
-    pinMode(switch_deslizante, INPUT);
 
+    pinMode(switch_deslizante, INPUT);
+    pinMode(sensor_pir_principal, INPUT);
     pinMode(trigger_sensor_distancia, OUTPUT);
     pinMode(echo_sensor_distancia, INPUT);
 
-    pinMode(sensor_pir_principal, INPUT);
-
+    pinMode(led_verde, OUTPUT);
+    pinMode(led_rojo, OUTPUT);
     pantalla_residuos.begin(16, 2);
 
     instancia_servo_uno.attach(servo_uno_compuerta);
@@ -298,7 +297,7 @@ bool validarContenido(int triggerPin, int echoPin)
 bool personaDetectada(int triggerPin, int echoPin)
 {
 
-    if (obtenerDistanciaSensor(triggerPin, echoPin) <= umbral_distancia_trigger)
+    if (obtenerDistanciaSensor(triggerPin, echoPin) <= umbral_distancia_persona)
     {
         return true;
     }
@@ -366,14 +365,14 @@ void loop()
                 {
                     abrirCompuerta();
                     compuerta_abierta = true;
-                    variable_auxiliar_contenido++;
+                    auxiliar_contenido++;
                     delay(1000);
                     habilitarContenedor();
                 }
             }
             else
             {
-                if (variable_auxiliar_contenido > 0)
+                if (auxiliar_contenido > 0)
                 {
                     procesoEnRiesgo();
                     delay(1000);
@@ -384,7 +383,7 @@ void loop()
                     mensajeMantenimiento();
                     conteo_aperturas_fallidos++;
                     Serial.println("\n=============================================");
-                    Serial.println(mensaje_contendor_lleno);
+                    Serial.println(mensaje_contenedor_lleno);
                     Serial.println("Se intento recilcar " + String(conteo_aperturas_fallidos) + " veces y no fue posible.");
                     delay(1000);
                     deshabilitarContenedor();
@@ -411,7 +410,7 @@ void loop()
                 }
                 else
                 {
-                    if (variable_auxiliar_contenido > 0)
+                    if (auxiliar_contenido > 0)
                     {
                         compuerta_abierta = false;
                         conteo_aperturas_exitosos++;
@@ -435,7 +434,7 @@ void loop()
                             contenedorAlMaximo();
                             compuerta_abierta = false;
                             Serial.println("\n=============================================");
-                            Serial.println(mensaje_contendor_lleno);
+                            Serial.println(mensaje_contenedor_lleno);
                             delay(1000);
                             deshabilitarContenedor();
                         }
@@ -444,7 +443,7 @@ void loop()
 
                 cerrarCompuerta();
             }
-            variable_auxiliar_contenido = 0; // reset del auxiliar ante cambios en el contenido post reciclaje.
+            auxiliar_contenido = 0; // reset del auxiliar ante cambios en el contenido post reciclaje.
         }
     }
     apagarPantalla();
