@@ -1,12 +1,12 @@
-// ================================================================================
+// ==============================
 // Librerías
-// ================================================================================
+// // ==============================
 #include <Servo.h>
 #include <Adafruit_LiquidCrystal.h>
 
-// ================================================================================
+// // ==============================
 // Declaraciones de pines
-// ================================================================================
+// // ==============================
 const int switch_deslizante = 8;    // interruptor manual
 const int sensor_pir_principal = 9; // sensor de movimiento
 
@@ -22,16 +22,16 @@ const int servo_dos_compuerta = 11; // servo motor 2
 const int led_rojo = 3;  // led de color rojo
 const int led_verde = 2; // led de color verde
 
-// ================================================================================
+// // ==============================
 // Objetos
-// ================================================================================
+// // ==============================
 Servo instancia_servo_uno;
 Servo instancia_servo_dos;
 Adafruit_LiquidCrystal pantalla_residuos(0);
 
-// ================================================================================
+// // ==============================
 // variables y estados
-// ================================================================================
+// // ==============================
 int umbral_distancia_persona = 150; // umbral de distancia minimo para detectar una persona cerca
 int umbral_altura_contenedor = 90;  // umbral de altura maxima de residuos permitidos en el contenedor para declararlo como "disponible"
 
@@ -53,9 +53,9 @@ unsigned long duracion_pantalla_encendida = 3000;              // Tiempo que la 
 bool pantalla_encendida = true;                                // variable para controlar el estado de la pantalla
 bool apertura_manual_contenedor = false;                       // variable para controlar el estado de la puerta
 
-// ================================================================================
+// // ==============================
 // Setup
-// ================================================================================
+// // ==============================
 void setup()
 {
     Serial.begin(9600);
@@ -71,12 +71,6 @@ void setup()
     pinMode(led_rojo, OUTPUT);
     pantalla_residuos.begin(16, 2);
 
-    instancia_servo_uno.attach(servo_uno_compuerta);
-    instancia_servo_uno.write(0);
-
-    instancia_servo_dos.attach(servo_dos_compuerta);
-    instancia_servo_dos.write(0);
-
     aptoRecibir(trigger_sensor_contenido, echo_sensor_contenido);
     apagarPantalla();
 }
@@ -84,7 +78,6 @@ void setup()
 // -----------------------------------------------------------------
 // manejador estados contenedor, pantalla y leds
 // -----------------------------------------------------------------
-
 void encenderPantalla()
 {
     if (!pantalla_encendida)
@@ -114,6 +107,7 @@ void estadoContenedor() // logica para estado inicial
     pantalla_residuos.setCursor(0, 1);
     pantalla_residuos.print("Habilitado");
 }
+
 void habilitarContenedor() // logica al detectar cuerpo cerca
 {
     digitalWrite(led_verde, HIGH);
@@ -169,7 +163,9 @@ void mensajeMantenimiento() // logica por vaciado pendiente
     pantalla_residuos.print("pendiente");
 }
 
-void procesoEnRiesgo() // logica por contenedor al maximo de capacidad posterior al reciclaje
+void procesoEnRiesgo()
+// logica por contenedor al maximo de
+// capacidad posterior al reciclaje
 {
     digitalWrite(led_verde, LOW);
     digitalWrite(led_rojo, HIGH);
@@ -186,7 +182,8 @@ void procesoEnRiesgo() // logica por contenedor al maximo de capacidad posterior
     pantalla_residuos.print("al tope.");
 }
 
-void puertaAbiertaManualmente() // logica para abrir puerta manualmente
+void puertaAbiertaManualmente()
+// logica para abrir puerta manualmente
 {
     apertura_manual_contenedor = true;
     digitalWrite(led_verde, LOW);
@@ -227,6 +224,8 @@ void puertaCerradaManualmente() // logica para cerrar puerta manualmente
 
 void abrirCompuerta() // abrir tapa contenedor
 {
+    instancia_servo_uno.attach(servo_uno_compuerta);
+    instancia_servo_dos.attach(servo_dos_compuerta);
     for (int pos = 0; pos <= angulo_limite_servo; pos++)
     {
         instancia_servo_uno.write(pos);
@@ -237,6 +236,8 @@ void abrirCompuerta() // abrir tapa contenedor
 
 void cerrarCompuerta() // cerrar tapa contenedor
 {
+    instancia_servo_uno.attach(servo_uno_compuerta);
+    instancia_servo_dos.attach(servo_dos_compuerta);
     for (int pos = angulo_limite_servo; pos >= 0; pos--)
     {
         instancia_servo_uno.write(pos);
@@ -266,7 +267,7 @@ long obtenerDistanciaSensor(int triggerPin, int echoPin)
 // devuelve posibilidad de recibir o no contenido
 bool aptoRecibir(int triggerPin, int echoPin)
 {
-    if (obtenerDistanciaSensor(triggerPin, echoPin) >= umbral_altura_contenedor)
+    if (validarContenido(triggerPin, echoPin))
     {
         espacio_disponible = true;
         estadoContenedor();
@@ -296,7 +297,6 @@ bool validarContenido(int triggerPin, int echoPin)
 // validador de persona cerca
 bool personaDetectada(int triggerPin, int echoPin)
 {
-
     if (obtenerDistanciaSensor(triggerPin, echoPin) <= umbral_distancia_persona)
     {
         return true;
@@ -325,7 +325,6 @@ void validadorEspacio()
 
 bool manejoManual()
 {
-
     if (digitalRead(switch_deslizante) == HIGH && !apertura_manual_contenedor)
     {
         puertaAbiertaManualmente();
